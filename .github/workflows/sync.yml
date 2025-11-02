@@ -1,0 +1,72 @@
+name: Pull from Source
+
+on:
+  workflow_dispatch:        # manual “Run workflow”
+  # schedule:
+  #   - cron: '*/30 * * * *'  # every 30 min (adjust as needed)
+
+permissions:
+  contents: write           # needed to push to this destination repo
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    env:
+      # REQUIRED: set these in this destination repo (Settings → Secrets/Variables)
+      SRC_OWNER: org-or-user-of-source         # e.g., taofik-ib
+      SRC_REPO: source-repo-name               # e.g., AzureBackupChecker
+      SRC_BRANCH: main
+      DEST_BRANCH: mirror-sync                 # branch in this destination repo
+      EXCLUDES: |
+        .git
+        .github/**
+
+    steps:
+      - name: Checkout destination (this repo)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEST_BRANCH }}
+          fetch-depth: 0
+
+      - name: Ensure branch exists locally
+        run: |
+          git checkout -B "${DEST_BRANCH}"
+
+      - name: Prepare auth + temp workspace
+        env:
+          # Use a Fine-grained PAT or classic PAT stored as a secret in THIS destination repo
+          TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Setting remotes"
+          # origin already points to this destination repo via GITHUB_TOKEN (write)
+          # We'll use TOKEN for source access
+          mkdir -p /tmp/src && cd /tmp/src
+          git clone "https://x-access-token:${TOKEN}@github.com/${SRC_OWNER}/${SRC_REPO}.git" src
+          cd src
+          git checkout "${SRC_BRANCH}"
+
+      - name: Copy source → destination working tree (exclude workflows)
+        run: |
+          set -euo pipefail
+          rsync -a --delete $(printf "%s " $(printf -- "--exclude=%s " $EXCLUDES)) /tmp/src/src/ ./
+
+          # Normalize line endings & safe file modes (optional)
+          git config core.autocrlf false
+
+      - name: Commit changes (if any) to mirror branch
+        run: |
+          set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to sync."
+          else
+            git -c user.name="sync-bot" -c user.email="sync-bot@users.noreply.github.com" \
+              commit -m "Sync from ${SRC_OWNER}/${SRC_REPO}@${SRC_BRANCH} [skip ci]"
+          fi
+
+      - name: Push mirror branch safely
+        run: |
+          set -euo pipefail
+          git fetch origin "${DEST_BRANCH}" || true
+          git push -u origin "${DEST_BRANCH}" --force-with-lease
