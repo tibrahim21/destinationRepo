@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # REQUIRED: set these in this destination repo (Settings → Secrets/Variables)
-      SRC_OWNER: org-or-user-of-source         # e.g., taofik-ib
-      SRC_REPO: source-repo-name               # e.g., AzureBackupChecker
+      SRC_OWNER: taofik-ib         # e.g., taofik-ib
+      SRC_REPO: sourceRepo              # e.g., AzureBackupChecker
       SRC_BRANCH: main
       DEST_BRANCH: mirror-sync                 # branch in this destination repo
       EXCLUDES: |
