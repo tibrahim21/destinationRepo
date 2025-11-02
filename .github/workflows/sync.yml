@@ -49,7 +49,8 @@ jobs:
       - name: Copy source → destination working tree (exclude workflows)
         run: |
           set -euo pipefail
-          rsync -a --delete $(printf "%s " $(printf -- "--exclude=%s " $EXCLUDES)) /tmp/src/src/ ./
+          rsync -a --update --ignore-existing /tmp/src/src/ ./
+
 
           # Normalize line endings & safe file modes (optional)
           git config core.autocrlf false
